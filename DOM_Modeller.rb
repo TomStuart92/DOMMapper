@@ -56,14 +56,14 @@ class NodeMapper
       node.public_methods.each do |method|
         sender = MethodSender.new
         set_trace_func proc { |event, file, line, id, binding, classname|
-          @vertices << [node.class, method, event, id, classname]
+          @vertices << [node.class, method, event, file, line, id, classname]
         }
           sender.send(node.class, method)
         set_trace_func(nil)
       end
     end
-    @vertices = @vertices.select{|node, method, event, id, classname| event == 'call' && node !=classname && classname != MethodSender}
-    @vertices = @vertices.map{|node, method, event, id, classname| [node, method, id, classname]}
+    @vertices = @vertices.select{|node, method, event, file, line, id, classname| event == 'call' && node !=classname && classname != MethodSender}
+    @vertices = @vertices.map{|node, method, event, file, line, id, classname| [node, method, id, file, line, classname]}
   end
 end
 
@@ -121,8 +121,9 @@ class PrettyPrinter
     end
     puts 'DEPENDENCIES:'
     puts '--------------------------------------------------------'
-    domain_model.vertices.each do |callClass, parentMethod, calledMethod, receipient|
+    domain_model.vertices.each do |callClass, parentMethod, calledMethod, file, lineNumber, receipient|
       puts "  - The method call #{callClass}.#{parentMethod} calls the method ##{calledMethod} on the #{receipient} class."
+      puts "    (File - #{file}: Line Number - #{lineNumber})"
     end
     puts '========================================================'
   end
