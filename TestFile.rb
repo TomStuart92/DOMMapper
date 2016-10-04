@@ -1,8 +1,8 @@
 class DockingStation
 
-  def initialize
+  def initialize(capacity)
     @bikes = []
-    @capacity = 5
+    @capacity = capacity
   end
 
   def add_bike

@@ -1,4 +1,14 @@
 require "#{ARGV[0]}"
+class MethodSender
+  def send(object, method)
+    init_args = object.instance_method(:initialize).arity
+    init_args > 0 ? init_args = Array.new(init_args) : init_args = []
+    init_args.empty? ? instance = object.send(:new) : instance = object.send(:new, init_args)
+    num_args = object.instance_method(method).arity
+    num_args > 0 ? args = Array.new(num_args) : args = []
+    args.empty? ? instance.send(method) : instance.send(method, args)
+  end
+end
 
 class Node
   attr_reader :class, :public_methods, :attributes, :private_methods
@@ -8,6 +18,7 @@ class Node
     @public_methods = []
     @private_methods = []
     @attributes = []
+    @sender = MethodSender.new
   end
 
   def analyse(classObject)
@@ -20,15 +31,15 @@ class Node
   private
 
   def update_attributes
-    @attributes = @class.new.instance_variables
+    @attributes = @sender.send(@class,:instance_variables)
   end
 
   def update_public_methods
-    @public_methods = @class.new.public_methods - Object.new.public_methods
+    @public_methods = @sender.send(@class,:public_methods) - Object.new.public_methods
   end
 
   def update_private_methods
-    @private_methods = @class.new.private_methods - Object.new.private_methods
+    @private_methods = @sender.send(@class,:private_methods) - Object.new.private_methods
   end
 end
 
@@ -43,15 +54,15 @@ class NodeMapper
   def find_vertices
     @nodes.each do |node|
       node.public_methods.each do |method|
+        sender = MethodSender.new
         set_trace_func proc { |event, file, line, id, binding, classname|
           @vertices << [node.class, method, event, id, classname]
         }
-          # node.class.instance_method(method).arity
-          node.class.new.send(method)
+          sender.send(node.class, method)
         set_trace_func(nil)
       end
     end
-    @vertices = @vertices.select{|node, method, event, id, classname| event == 'call' && node !=classname}
+    @vertices = @vertices.select{|node, method, event, id, classname| event == 'call' && node !=classname && classname != MethodSender}
     @vertices = @vertices.map{|node, method, event, id, classname| [node, method, id, classname]}
   end
 end
