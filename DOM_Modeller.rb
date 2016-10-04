@@ -1,9 +1,7 @@
 require "#{ARGV[0]}"
 
-
-
 class Node
-  attr_reader :class, :public_methods
+  attr_reader :class, :public_methods, :attributes, :private_methods
 
   def initialize
     @class = nil
@@ -48,31 +46,75 @@ class NodeMapper
         set_trace_func proc { |event, file, line, id, binding, classname|
           @vertices << [node.class, method, event, id, classname]
         }
-          p method.parameters
+          # node.class.instance_method(method).arity
           node.class.new.send(method)
         set_trace_func(nil)
       end
     end
-    @vertices = @vertices.select{|node, method, event, id, classname| event == 'call'}
+    @vertices = @vertices.select{|node, method, event, id, classname| event == 'call' && node !=classname}
+    @vertices = @vertices.map{|node, method, event, id, classname| [node, method, id, classname]}
   end
 end
 
-file = File.open(ARGV[0])
-  classes = file.read.scan(/class (\w+)/).flatten
-file.close
+class DomainModel
 
-objects = classes.map do |className|
-  Object.const_get("#{className}")
+  attr_reader :nodes, :classes, :vertices
+
+  def initialize(file)
+    file = File.open(ARGV[0])
+      @classes = file.read.scan(/class (\w+)/).flatten
+    file.close
+    @nodes = []
+    @vertices = []
+    @objects = @classes.map do |className|
+      Object.const_get("#{className}")
+    end
+    self.get_nodes
+    self.get_vertices
+  end
+
+  def get_nodes
+    @objects.each do |object|
+      node = Node.new
+      node.analyse(object)
+      @nodes << node
+    end
+  end
+
+  def get_vertices
+    @vertices = NodeMapper.new(@nodes).find_vertices
+  end
 end
 
-@nodes = []
+class PrettyPrinter
 
-objects.each do |object|
-  node = Node.new
-  node.analyse(object)
-  @nodes << node
+  def print(domain_model)
+    puts '========================================================'
+    puts 'CLASSES:'
+    puts '--------------------------------------------------------'
+    domain_model.nodes.each do |node|
+      puts node.class
+      puts "  - Attributes:"
+      node.attributes.each do |attribute|
+        puts "    * " + attribute.to_s
+      end
+      puts "  - Public Methods:"
+      node.public_methods.each do |publicmethod|
+        puts "    * " + publicmethod.to_s
+      end
+      puts "  - Private Methods:"
+      node.private_methods.each do |privatemethod|
+        puts "    * " + privatemethod.to_s
+      end
+      puts '--------------------------------------------------------'
+    end
+    puts 'DEPENDENCIES:'
+    puts '--------------------------------------------------------'
+    domain_model.vertices.each do |callClass, parentMethod, calledMethod, receipient|
+      puts "  - The method call #{callClass}.#{parentMethod} calls the method ##{calledMethod} on the #{receipient} class."
+    end
+    puts '========================================================'
+  end
 end
 
-nm = NodeMapper.new(@nodes)
-nm.find_vertices
-nm.vertices
+PrettyPrinter.new.print(DomainModel.new(ARGV[0]))
