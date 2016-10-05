@@ -12,14 +12,14 @@ class Airport
     pre_landing_checks(plane)
     plane.land
     add_plane_to_airport(plane)
-    puts "The plane has landed safely at the airport."
+    "The plane has landed safely at the airport."
   end
 
   def takeoff(plane)
     pre_takeoff_checks(plane)
     plane.takeoff
     remove_plane_from_airport(plane)
-    puts "The plane has successfully taken off."
+    "The plane has successfully taken off."
   end
 
   private
@@ -55,35 +55,10 @@ class Airport
   end
 
   def weather_safe?
-    Weather.new.check_safe?
+    weather.check_safe?
   end
 
   def airport_full?
     landed_planes.length >= capacity
-  end
-end
-# Creates plane objects for use with airport.rb class.
-class Plane
-  attr_reader :landed
-  alias_method :landed?, :landed
-
-  def initialize
-    @landed = false
-  end
-
-  def land
-    @landed = true
-  end
-
-  def takeoff
-    @landed = false
-  end
-end
-
-# Creates a probalistic weather model.
-class Weather
-UNSAFE_PROB = 2
-  def check_safe?
-     Kernel.rand(1..10) > UNSAFE_PROB
   end
 end

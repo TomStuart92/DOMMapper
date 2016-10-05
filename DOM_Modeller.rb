@@ -1,4 +1,4 @@
-require "#{ARGV[0]}"
+Dir["#{ARGV[0]}/*.rb"].each {|file| require file }
 
 class Spy
   attr_reader :calls
@@ -29,10 +29,10 @@ class MethodSender
 end
 
 class Node
-  attr_reader :class, :public_methods, :attributes, :private_methods
+  attr_reader :classname, :public_methods, :attributes, :private_methods
 
   def initialize
-    @class = nil
+    @classname = nil
     @public_methods = []
     @private_methods = []
     @attributes = []
@@ -40,7 +40,7 @@ class Node
   end
 
   def analyse(classObject)
-    @class = classObject
+    @classname = classObject
     update_attributes
     update_public_methods
     update_private_methods
@@ -49,15 +49,15 @@ class Node
   private
 
   def update_attributes
-    @attributes = @sender.send(@class,:instance_variables)
+    @attributes = @sender.send(@classname, :instance_variables)
   end
 
   def update_public_methods
-    @public_methods = @sender.send(@class,:public_methods) - Object.new.public_methods
+    @public_methods = @sender.send(@classname, :public_methods) - Object.new.public_methods
   end
 
   def update_private_methods
-    @private_methods = @sender.send(@class,:private_methods) - Object.new.private_methods
+    @private_methods = @sender.send(@classname, :private_methods) - Object.new.private_methods
   end
 end
 
@@ -76,20 +76,43 @@ class NodeMapper
       node.public_methods.each do |method|
         sender = MethodSender.new
         set_trace_func proc { |event, file, line, id, binding, classname|
-          @vertices << [node.class, method, event, file, line, id, classname]
+          @vertices << [node.classname, method, event, file, line, id, classname]
         }
-          sender.send(node.class, method)
+          sender.send(node.classname, method)
         set_trace_func(nil)
+
         sender.instanceSpy.calls.each do |call|
-          @vertices << [node.class, method, "call", "file", "unknown", call, "Injected"]
-        end
-        sender.classSpy.calls.each do |call|
-          @vertices << [node.class, method, "call", "file", "unknown", call, "Injected"]
+          target = @nodes.select{|node| node.public_methods.include? call}.pop
+          @vertices << [node.classname, method, "call", "file", "unknown", call, target.classname]
         end
       end
     end
-    @vertices = @vertices.select{|node, method, event, file, line, id, classname|  node !=classname && ([Airport, Plane, Weather, "Injected"].include? classname)}
+    classes = @nodes.map(&:classname).push("Injected")
+    @vertices = @vertices.select{|node, method, event, file, line, id, classname|  node !=classname && (classes.include? classname)}
     @vertices = @vertices.map{|node, method, event, file, line, id, classname| [node, method, id, classname]}.uniq
+  end
+end
+
+class FileMerger
+  def self.concatenate(directory)
+    dirTree = File.absolute_path(directory)
+    File.open('merged.txt','a') do |mergedFile|
+      topDir = File.absolute_path(directory)
+      filesInDir = Dir["#{topDir}/**/**/*.*"]
+      filesInDir.each do |file|
+        unless File.basename(file) =~ /jpg|png|gif|modernizr|fancybox|jquery/
+          relativePath = File.absolute_path(file).gsub("#{dirTree}","..")
+          puts "processing: #{relativePath}"
+          mergedFile << "\n\n=========================================================\n"
+          mergedFile << "#{relativePath}\n"
+          mergedFile << "=========================================================\n\n"
+          text = File.open(file, 'r').read
+          text.each_line do |line|
+            mergedFile << line
+          end
+        end
+      end
+    end
   end
 end
 
@@ -97,9 +120,11 @@ class DomainModel
 
   attr_reader :nodes, :classes, :vertices
 
-  def initialize(file)
-    file = File.open(ARGV[0])
+  def initialize(directory)
+    FileMerger.concatenate(directory)
+    file = File.open('./merged.txt')
       @classes = file.read.scan(/class (\w+)/).flatten
+      p @classes
     file.close
     @nodes = []
     @vertices = []
@@ -130,7 +155,7 @@ class PrettyPrinter
     puts 'CLASSES:'
     puts '--------------------------------------------------------'
     domain_model.nodes.each do |node|
-      puts node.class
+      puts node.classname
       puts "  - Attributes:"
       node.attributes.each do |attribute|
         puts "    * " + attribute.to_s
@@ -159,3 +184,4 @@ class PrettyPrinter
 end
 
 PrettyPrinter.new.print(DomainModel.new(ARGV[0]))
+File.delete('./merged.txt')
