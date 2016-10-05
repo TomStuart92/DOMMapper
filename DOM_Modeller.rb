@@ -1,12 +1,22 @@
 require "#{ARGV[0]}"
+
+class Spy
+  def initialize
+    @calls = []
+  end
+  def self.method_missing(method_sym)
+    @calls << method_sym
+  end
+end
+
 class MethodSender
   def send(object, method)
     init_args = object.instance_method(:initialize).arity
-    init_args > 0 ? init_args = Array.new(init_args) : init_args = []
+    init_args > 0 ? init_args = Array.new(init_args, Spy) : init_args = []
     init_args.empty? ? instance = object.send(:new) : instance = object.send(:new, init_args)
     num_args = object.instance_method(method).arity
-    num_args > 0 ? args = Array.new(num_args) : args = []
-    args.empty? ? instance.send(method) : instance.send(method, args)
+    num_args > 0 ? args = Array.new(num_args, Spy) : args = []
+    args.empty? ? instance.send(method) : instance.send(method, *args)
   end
 end
 
@@ -109,14 +119,17 @@ class PrettyPrinter
       node.attributes.each do |attribute|
         puts "    * " + attribute.to_s
       end
+      puts " "
       puts "  - Public Methods:"
       node.public_methods.each do |publicmethod|
         puts "    * " + publicmethod.to_s
       end
+      puts " "
       puts "  - Private Methods:"
       node.private_methods.each do |privatemethod|
         puts "    * " + privatemethod.to_s
       end
+      puts " "
       puts '--------------------------------------------------------'
     end
     puts 'DEPENDENCIES:'
@@ -124,6 +137,7 @@ class PrettyPrinter
     domain_model.vertices.each do |callClass, parentMethod, calledMethod, file, lineNumber, receipient|
       puts "  - The method call #{callClass}.#{parentMethod} calls the method ##{calledMethod} on the #{receipient} class."
       puts "    (File - #{file}: Line Number - #{lineNumber})"
+      puts " "
     end
     puts '========================================================'
   end
