@@ -1,22 +1,30 @@
 require "#{ARGV[0]}"
 
 class Spy
+  attr_reader :calls
   def initialize
     @calls = []
   end
-  def self.method_missing(method_sym)
+  def method_missing(method_sym)
     @calls << method_sym
+    return  self
   end
 end
 
 class MethodSender
+  attr_reader :classSpy, :instanceSpy
+  def initialize
+    @classSpy = Spy.new
+    @instanceSpy = Spy.new
+  end
+
   def send(object, method)
-    init_args = object.instance_method(:initialize).arity
-    init_args > 0 ? init_args = Array.new(init_args, Spy) : init_args = []
-    init_args.empty? ? instance = object.send(:new) : instance = object.send(:new, init_args)
-    num_args = object.instance_method(method).arity
-    num_args > 0 ? args = Array.new(num_args, Spy) : args = []
-    args.empty? ? instance.send(method) : instance.send(method, *args)
+      init_args = object.instance_method(:initialize).arity
+      init_args > 0 ? init_args = Array.new(init_args, @classSpy) : init_args = []
+      init_args.empty? ? instance = object.send(:new) : instance = object.send(:new, init_args)
+      num_args = object.instance_method(method).arity
+      num_args > 0 ? args = Array.new(num_args, @instanceSpy) : args = []
+      args.empty? ? instance.send(method) : instance.send(method, *args)
   end
 end
 
@@ -62,7 +70,9 @@ class NodeMapper
   end
 
   def find_vertices
+
     @nodes.each do |node|
+
       node.public_methods.each do |method|
         sender = MethodSender.new
         set_trace_func proc { |event, file, line, id, binding, classname|
@@ -70,10 +80,16 @@ class NodeMapper
         }
           sender.send(node.class, method)
         set_trace_func(nil)
+        sender.instanceSpy.calls.each do |call|
+          @vertices << [node.class, method, "call", "file", "unknown", call, "Injected"]
+        end
+        sender.classSpy.calls.each do |call|
+          @vertices << [node.class, method, "call", "file", "unknown", call, "Injected"]
+        end
       end
     end
-    @vertices = @vertices.select{|node, method, event, file, line, id, classname| event == 'call' && node !=classname && classname != MethodSender}
-    @vertices = @vertices.map{|node, method, event, file, line, id, classname| [node, method, id, file, line, classname]}
+    @vertices = @vertices.select{|node, method, event, file, line, id, classname|  node !=classname && ([Airport, Plane, Weather, "Injected"].include? classname)}
+    @vertices = @vertices.map{|node, method, event, file, line, id, classname| [node, method, id, classname]}.uniq
   end
 end
 
@@ -134,9 +150,8 @@ class PrettyPrinter
     end
     puts 'DEPENDENCIES:'
     puts '--------------------------------------------------------'
-    domain_model.vertices.each do |callClass, parentMethod, calledMethod, file, lineNumber, receipient|
+    domain_model.vertices.each do |callClass, parentMethod, calledMethod, receipient|
       puts "  - The method call #{callClass}.#{parentMethod} calls the method ##{calledMethod} on the #{receipient} class."
-      puts "    (File - #{file}: Line Number - #{lineNumber})"
       puts " "
     end
     puts '========================================================'

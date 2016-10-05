@@ -1,0 +1,89 @@
+# Creates an airport object which can land/takeoff plane objects.
+class Airport
+  DEFAULT_CAPACITY = 6
+
+  def initialize(options = {})
+    @capacity = options.fetch(:capacity, DEFAULT_CAPACITY)
+    @weather = options.fetch(:weather_system, Weather.new)
+    @landed_planes = []
+  end
+
+  def land(plane)
+    pre_landing_checks(plane)
+    plane.land
+    add_plane_to_airport(plane)
+    puts "The plane has landed safely at the airport."
+  end
+
+  def takeoff(plane)
+    pre_takeoff_checks(plane)
+    plane.takeoff
+    remove_plane_from_airport(plane)
+    puts "The plane has successfully taken off."
+  end
+
+  private
+
+  attr_reader :capacity, :weather, :landed_planes
+
+  def pre_landing_checks(plane)
+    "That plane is at another airport." if plane_landed?(plane)
+    'Airport is full, the plane has diverted.' if airport_full?
+    'Poor weather means the plane has to divert.' unless weather_safe?
+  end
+
+  def pre_takeoff_checks(plane)
+    'That plane is currently flying' unless plane_landed?(plane)
+    'That plane is at another airport' unless at_airport?(plane)
+    'Poor weather means the plane can not takeoff.' unless weather_safe?
+  end
+
+  def add_plane_to_airport(plane)
+    landed_planes << plane
+  end
+
+  def remove_plane_from_airport(plane)
+    landed_planes.delete(plane)
+  end
+
+  def at_airport?(plane)
+    landed_planes.include? plane
+  end
+
+  def plane_landed?(plane)
+    plane.landed?
+  end
+
+  def weather_safe?
+    Weather.new.check_safe?
+  end
+
+  def airport_full?
+    landed_planes.length >= capacity
+  end
+end
+# Creates plane objects for use with airport.rb class.
+class Plane
+  attr_reader :landed
+  alias_method :landed?, :landed
+
+  def initialize
+    @landed = false
+  end
+
+  def land
+    @landed = true
+  end
+
+  def takeoff
+    @landed = false
+  end
+end
+
+# Creates a probalistic weather model.
+class Weather
+UNSAFE_PROB = 2
+  def check_safe?
+     Kernel.rand(1..10) > UNSAFE_PROB
+  end
+end
